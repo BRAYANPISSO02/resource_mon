@@ -1,96 +1,111 @@
-#  src – Código fuente de `resource_mon`
+# Carpeta src
 
-Esta carpeta contiene el código fuente modular del proyecto `resource_mon`.  
-Cada archivo implementa una funcionalidad específica del sistema:
+Esta carpeta contiene el código fuente principal del proyecto `resource_mon`.  
+
+Aquí se implementan los módulos funcionales encargados de obtener la información del sistema (CPU y memoria), la interfaz de usuario en consola y el programa principal que integra todo.
 
 ---
 
-##  Módulos
+## Estructura
 
-###  cpuinfo_manip.c / .h
+src
+├── cpuinfo_manip.c       # Implementación de funciones para manejo de info CPU
+├── cpuinfo_manip.h       # Declaraciones y estructuras para info CPU
+├── meminfo_manip.c       # Implementación de funciones para manejo de info memoria
+├── meminfo_manip.h       # Declaraciones y estructuras para info memoria
+├── resource_mon.c        # Programa principal que integra los módulos
+├── tui.c                 # Implementación de la interfaz de usuario en consola
+├── tui.h                 # Declaraciones de funciones para la interfaz (TUI)
+└── Makefile              # Makefile para compilar los archivos fuente de src
 
-Funciones para obtener información de la CPU desde `/proc/cpuinfo` y `/proc/stat`.
+---
+## Contenido de la carpeta
 
-**Funciones:**
+- **cpuinfo_manip.c / cpuinfo_manip.h**  
+  Funciones y estructuras para obtener y procesar la información de la CPU: modelo, fabricante, núcleos, hilos y porcentaje de uso.
 
-- `int get_cpu_info(CPUInfo *info)`
-  - Llena una estructura con:
-    - Modelo de la CPU (`model_name`)
-    - Fabricante (`vendor_id`)
-    - Número de núcleos físicos (`cores`)
-    - Número de hilos lógicos (`threads`)
-- `int get_cpu_usage_percentages(float *percentages, int threads)`
-  - Calcula el uso de CPU por hilo, devolviendo un arreglo de porcentajes por hilo (`CPU 0`, `CPU 1`, etc.).
+- **meminfo_manip.c / meminfo_manip.h**  
+  Funciones y estructuras para obtener y procesar la información de la memoria física y swap: total, disponible y porcentaje de uso.
 
-**Estructura:**
+- **tui.c / tui.h**  
+  Funciones para la interfaz de usuario en modo texto (CLI), encargadas de mostrar la información en pantalla y detectar la entrada del usuario.
 
-```c
-typedef struct {
-    char model_name[128];
-    char vendor_id[64];
-    int cores;
-    int threads;
-} CPUInfo;
-```
+- **resource_mon.c**  
+  Programa principal que ejecuta el ciclo de monitoreo, actualizando la pantalla y gestionando la interacción con el usuario.
 
-meminfo_manip.c / .h
+- **Makefile**  
+  Reglas para compilar los archivos fuente en objetos `.o` y preparar la carpeta para enlazado.
 
-Lectura de uso de memoria RAM y Swap desde /proc/meminfo.
+---
 
-Funciones:
+## Módulos y funciones principales
 
-   int get_mem_info(MemInfo *info)
+### cpuinfo_manip
 
-   Llena la estructura con:
+- **Estructura `CPUInfo`**  
+  ```c
+  typedef struct {
+      char model_name[128];
+      char vendor_id[64];
+      int cores;     // núcleos físicos
+      int threads;   // hilos lógicos
+  } CPUInfo;
 
-   RAM total y disponible (en KB)
+### Funciones
 
-   Swap total y libre (en KB)
+#### int get_cpu_info(CPUInfo *info)
+    Lee /proc/cpuinfo y llena la estructura CPUInfo con datos del sistema.
+    Retorna 0 si tuvo éxito, -1 en caso de error.
 
-  float get_used_mem_percent(const MemInfo *info)
+#### int get_cpu_usage_percentages(float *percentages, int thread_count)
+    Calcula el porcentaje de uso de CPU por cada hilo (núcleo lógico) leyendo /proc/stat dos veces con intervalo de 1 segundo.
+    Llena el arreglo percentages con los valores calculados.
 
-   Devuelve el porcentaje de RAM usada.
+### Estrutura meminfo_manip
+    typedef struct {
+        unsigned long mem_total_kb;
+        unsigned long mem_available_kb;
+        unsigned long swap_total_kb;
+        unsigned long swap_free_kb;
+    } MemInfo;
 
-  float get_used_swap_percent(const MemInfo *info)
+#### Funciones
 
-   Devuelve el porcentaje de Swap usada.
+##### int get_mem_info(MemInfo *info)
+    Lee /proc/meminfo y llena la estructura MemInfo con datos actuales de memoria.
+    Retorna 0 si tuvo éxito, -1 en caso de error.
 
-Estructura:
-typedef struct {
-    unsigned long mem_total_kb;
-    unsigned long mem_available_kb;
-    unsigned long swap_total_kb;
-    unsigned long swap_free_kb;
-} MemInfo;
+##### float get_used_mem_percent(const MemInfo *info)
+    Calcula el porcentaje de memoria física usada.
 
-tui.c / .h
+##### float get_used_swap_percent(const MemInfo *info)
+    Calcula el porcentaje de memoria swap usada.
 
-Interfaz de usuario basada en consola (CLI) que muestra los datos en la misma posición de pantalla.
+### tui
+#### Funciones
 
-Funciones:
+##### void draw_screen(const CPUInfo *cpuinfo, const float *cpu_usage, const MemInfo *meminfo)
+    Limpia la pantalla y muestra la información actualizada de CPU y memoria.
 
-    void draw_screen(const CPUInfo *cpuinfo, const float *cpu_usage, const MemInfo *meminfo)
+##### int tui_check_exit()
+    Detecta si el usuario presionó 'q' o 'Q' para indicar que desea salir.
+    Usa modo no bloqueante para no detener la ejecución mientras espera entrada.
 
-        Muestra la información en pantalla, actualizándola cada segundo.
+#### Detalles adicionales
+    El módulo tui gestiona la salida en consola para mostrar las métricas del sistema (CPU y memoria) de manera interactiva. Permite la actualización continua de la pantalla sin generar nuevas líneas en cada ciclo.
 
-    int tui_check_exit()
+### resource_mon.c
 
-        Retorna 1 si el usuario presiona la tecla q.
+Este archivo contiene el programa principal que ejecuta el ciclo de monitoreo de CPU y memoria:
 
- resource_mon.c
+#### Configura una señal para manejar interrupciones (Ctrl+C).
+#### Obtiene la información estática de la CPU al inicio del programa utilizando get_cpu_info.
+#### En un ciclo que se repite cada segundo:
 
-Archivo principal que contiene el bucle principal del programa.
+##### Obtiene el porcentaje de uso de CPU utilizando get_cpu_usage_percentages.
+##### Obtiene la información de memoria usando get_mem_info.
+##### Actualiza la pantalla con la información más reciente.
+##### Verifica si el usuario presionó la tecla q para salir utilizando tui_check_exit.
 
-Responsabilidades:
+#### Al finalizar, libera los recursos y muestra un mensaje de salida.
 
-    Llama a los módulos cpuinfo, meminfo y tui.
-
-    Ejecuta el ciclo de actualización cada segundo.
-
-    Finaliza cuando el usuario presiona q o Ctrl+C.
-
- Compilación desde esta carpeta
-
-Desde src/, puedes usar:
-make         # Compila los .o en ../obj/
-make clean   # Limpia archivos objeto
